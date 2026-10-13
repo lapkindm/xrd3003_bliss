@@ -81,7 +81,8 @@ instrument.
 - **`tests/test_absorber.py`** checks the factors and the decisions against
   literal transcriptions of spec's `absorber_korrektur` and `check_rate`, over
   132 beam / position / on-off combinations.
-- **`tests/bliss_e2e.py`** runs real Bliss `ct`, `loopscan` and `dscan` with
+- **`tests/bliss_e2e.py`** (run it with `tests/run_e2e.sh`, which starts a throwaway
+  Beacon and the fakes; needs `isovolt_driver` next to this repository) runs real Bliss `ct`, `loopscan` and `dscan` with
   three fakes: a fake Mythen (`tests/fake_mythen.py`, UDP 1030 / TCP 1031 on
   127.0.0.1) whose beam depends on the mockup `a2`, the fake generator from
   `isovolt_driver`, and a mockup `a2`. It covers the counters, the pre-count
