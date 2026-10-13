@@ -33,6 +33,173 @@ Install with `pip install -e .` in the Bliss environment. The modules are
 made available in a session by its setup and session script, e.g.
 `from xrd3003_bliss.scan_commands import step_fit, goto_step`.
 
+## User guide: Bliss commands on the XRD-3003TT
+
+Commands for running the instrument from the Bliss `xrd` session. Type them
+in the Bliss shell; `help(command)` shows the details of any of them.
+
+### Starting and stopping
+
+Bliss and spec never run together: each refuses to start while the other
+holds the instrument.
+
+| Task | How |
+|---|---|
+| Start the session | **BLISS XRD** launcher, or `bliss -s xrd` |
+| Leave the session | `exit()` |
+| Switch to spec | `exit()` in Bliss first, then start `fourc` |
+| Switch back to Bliss | quit spec first, then the launcher |
+
+At start the session takes about 25 s: it initialises all motors and takes
+over positions spec changed, then prints the data file, the generator,
+shutter and door state and the autoabsorber setting. Flint, the plot window,
+opens with the first scan.
+
+### Data files
+
+Data goes to `~/Data/<experimenter>/<sample>.h5`, one HDF5 file per
+experimenter and sample, all scans inside.
+
+| Task | Command |
+|---|---|
+| New or existing file | `newfile("alice", "251002_PEN_4P_grad")` |
+| Show the current file | `SCAN_SAVING.filename` |
+| Count without saving / saving | `ct(1)` / `sct(1)` |
+
+`newfile` numbers scans per file, as spec did. Put the sample's preparation
+date in its name yourself; no measurement date is added. Use only letters,
+digits, `_`, `-` and `.` in names.
+
+### Motors
+
+| Motor | What | Unit |
+|---|---|---|
+| `th`, `tth` | theta, two-theta | deg |
+| `chi` | sample tilt | deg |
+| `x` | sample translation (spec `phi`), limited to ±10 mm | mm |
+| `y`, `z` | sample translation, height | mm |
+| `m1` | monochromator | to be confirmed |
+| `a2` | absorber wheel of the autoabsorber (spec `A_Mo`), positions 1–6 | position |
+| `a1` | second absorber wheel (spec `A_Cu`), positions 1–6 | position |
+
+| Task | Command |
+|---|---|
+| All positions / some | `wa()` / `wm(th, tth)` |
+| Move, showing the position | `umv(th, 1.2)` or `umv(th, 1.2, tth, 2.4)` |
+| Move relative | `umvr(z, -0.1)` |
+| Redefine the position (spec `set`) | `th.position = 0` |
+| Limits, speed, acceleration | `x.limits`, `x.velocity`, `x.acceleration` |
+| Take over positions changed outside Bliss | `z.sync_hard()` |
+| Stop a move | Ctrl-C |
+
+Limits and `.position` are kept between sessions. A move outside the limits
+is refused before anything moves.
+
+### X-rays: generator, shutter, absorber
+
+The shutter opens only with both doors closed, and only after `a2` has moved
+to 6 (most absorber). Before each count the autoabsorber takes a 0.1 s
+pre-count and adjusts `a2`, as spec's `check_rate` did.
+
+| Task | Command |
+|---|---|
+| Open / close the shutter | `shopen()` / `shclose()` |
+| Shutter, doors, generator state | `shutter`, `doors.state()`, `generator` |
+| High voltage on | `generator_on()`, then `generator.ramp_to(40, 30)` (kV, mA) |
+| Ramp down and switch off | `generator_off()` (closes the shutter first) |
+| Autoabsorber on / off | `auto_on()` / `auto_off()` |
+| Set the absorber by hand | `umv(a2, 3)` |
+
+The generator ramps in steps of 10 kV or 5 mA every 30 s, current first when
+going down; its limits are 40 kV, 30 mA and 1200 W. The count-rate
+protection stays on even with `auto_off()`: above 70000 counts in the
+pre-count it closes the shutter and stops the scan. A scan started with the
+shutter open stops if a door opens, the shutter closes or the high voltage
+goes off; the generator's hardware interlock acts first.
+
+### Counting and scans
+
+Scans take the number of intervals, as in spec: `ascan(th, 0, 1, 100, 5)`
+measures 101 points, 5 s each.
+
+| Scan | Command |
+|---|---|
+| Absolute | `ascan(z, 6, 9, 50, 0.2)` |
+| Relative, back to the start afterwards | `dscan(z, -1.5, 1.5, 50, 0.2)` |
+| Two motors | `a2scan(th, 0, 2, tth, 0, 2, 200, 25)` |
+| Two motors, relative | `d2scan(th, -0.05, 0.05, tth, 0.05, -0.05, 25, 1)` |
+| Repeat without moving | `loopscan(10, 1)` |
+
+`dscan`, `d2scan` and `d3scan` also put `a2` back where it was, even after
+Ctrl-C, as spec's macros did. Ctrl-C stops a scan; a plain scan leaves the
+shutter as it was. The Mythen counters are described under
+[Counters](#counters); in commands write e.g. `mythen.counters.spec`.
+
+### Plotting in Flint
+
+Flint opens with the first scan, stays on top of the other windows and
+returns to its **Live scan** tab at every scan. The curve shows the
+`plotselect` counter, `spec_corr` unless changed.
+
+| Task | How |
+|---|---|
+| Choose the plotted counter | `plotselect(mythen.counters.spec)` |
+| Log / linear y axis | toolbar button, or `get_flint().get_live_plot(kind="default-curve").yscale = "log"` |
+| Counts per second | property panel → **Create items** → **Normalized function** → `mythen:exposure` |
+| Live derivative or Gaussian fit | property panel → **Create items** → **Derivative function** / **Gaussian fit** |
+| Flint not always on top | `flint_on_top(False)`; back with `flint_on_top(True)` |
+| Close or move a tab | **Layout** → **Lock/unlock the view** (Ctrl+L), then the × in the plot's title bar |
+
+`get_flint` needs `from bliss.common.plot import get_flint` first. The
+`plotselect` counter is also the one `cen()`, `peak()` and the analysis
+commands below use.
+
+### Analysing the last scan
+
+| Task | Command | Gives |
+|---|---|---|
+| Peak position / go there | `peak()` / `goto_peak()` | position of the highest point |
+| Centre of the FWHM / go there | `cen()` / `goto_cen()` | centre, Bliss method |
+| Width | `fwhm()` | FWHM, Bliss method |
+| Edge from a step fit / go there | `step_fit()` / `goto_step()` | `.position`, `.fwhm` (beam width), errors |
+| Derivative | `deriv()` | three-point dy/dx at each point |
+| Beam width from the derivative | `deriv_fwhm()`, or `deriv_fit()` | Gaussian fit of the derivative |
+| Shadow scan | `shad_fit(axis=th)` | `.apex`, `.peak`, `.slope_left`, `.slope_right` |
+
+For edges such as z scans use `step_fit` / `goto_step`: Bliss's `cen()` can
+jump to the reflection peak after the edge. For a two-motor scan the commands
+give one result per motor, e.g. `cen()[th]`. Details under
+[Scan analysis in detail](#scan-analysis-in-detail).
+
+### Macros and long measurements
+
+Personal macros are Python files in `~/Macros/Users/<name>/`, like spec's
+`.mac` files. Load one with `user_script_load("<name>/<file>",
+export_global=True)` (again after editing it); `user_script_list()` lists
+them. Long measurements can send e-mails with
+`with notifying("my run", to="a@example.org"): ...`, and scans can run
+commands at given points with `with_actions` (both described below).
+
+### Shell tips and troubleshooting
+
+| In the shell | How |
+|---|---|
+| Paste | Shift+right-click → Paste, or Ctrl+Shift+V |
+| Copy | Shift+drag to select, then Ctrl+Shift+C |
+| Paste several lines of code | F6 (paste mode), paste, Esc then Enter to run, F6 again |
+| Details of the last error | `last_error()` |
+
+| Message or symptom | What to do |
+|---|---|
+| `spec (fourc) is running` at session start | quit spec, then start Bliss again |
+| `spec NOT started: Bliss is using the instrument` | `exit()` in the Bliss shell first |
+| `discrepancy between dial and controller position` | `motor.sync_hard()`; a session start does this for all motors |
+| ViX motor (`th` … `z`) in FAULT | check the stage can move freely, then e.g. `z.on()` |
+| `POSLOST` on `m1`, `a1` or `a2` | reference it: `a2.home()`, or set its position after checking it |
+| Shutter does not open | `doors.state()` and `generator`: a door open, or high voltage off |
+| `count rate too high … shutter closed` | more absorber, or check the alignment |
+| Flint looks frozen (remote desktop) | click into it; the next scan reopens it if closed |
+
 ## Counters
 
 f is the absorber correction factor at the current `a2` position: the
@@ -106,7 +273,7 @@ of them agree. `doors.state()` gives e.g. `{"door1": "closed", "door2":
 "open"}`. The shutter of `isovolt_driver` uses it (`door_check: doors`) to
 refuse an open before the generator ever sees the attempt.
 
-## Analysing the last scan
+## Scan analysis in detail
 
 These work like Bliss's `cen()`: on the last scan and the `plotselect`
 counter unless given, one result per scanned motor (a mapping for an
@@ -137,7 +304,7 @@ tuple or a command text run in the session. Everything is checked before the
 scan starts, each action is written as a note into the scan's data, and a
 failing action stops the scan.
 
-## Data files
+## newfile and scan numbers
 
 `newfile("alice", "PEN_4P")` sets `SCAN_SAVING.experimenter` and `.sample`
 and continues the scan numbers of that file, starting at 1 for a new file.
