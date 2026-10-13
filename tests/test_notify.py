@@ -6,7 +6,7 @@ from unittest import mock
 
 from xrd3003_bliss import notify as nt
 
-ME = "responsible@uni-tuebingen.de"  # set by the session on the instrument
+ME = "responsible@example.org"  # set by the session on the instrument
 
 
 class Mails(unittest.TestCase):
@@ -30,10 +30,10 @@ class Mails(unittest.TestCase):
         return self.sent[i].get_payload(decode=True).decode()
 
     def test_finished_goes_to_the_given_addresses(self):
-        with nt.notifying("spatial scan -25..25", to="a@uni-tuebingen.de") as status:
+        with nt.notifying("spatial scan -25..25", to="a@example.org") as status:
             status["point"] = "51/51 (y = 25)"
         self.assertEqual(len(self.sent), 1)
-        self.assertEqual(self.sent[0]["To"], "a@uni-tuebingen.de")
+        self.assertEqual(self.sent[0]["To"], "a@example.org")
         self.assertEqual(self.sent[0]["Subject"], "[XRD-3003TT] Finished: spatial scan -25..25")
         self.assertIn("finished normally", self.text(0))
         self.assertIn("Point: 51/51 (y = 25)", self.text(0))
