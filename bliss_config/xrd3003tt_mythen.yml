@@ -1,0 +1,40 @@
+# Dectris Mythen 1K (1 module, 1280 channels) of the XRD-3003TT, with spec's
+# counters, autoabsorber and count-rate shutter close (site.mac:
+# user_getcounts, absorber_korrektur, check_rate).
+# spec: HW_MYTHEN = 192.168.0.90:1030 TrimCu
+#
+# The settings and every correction key are sent to the detector when the
+# object is created: do not load it while spec is running.
+
+- plugin: bliss
+  package: xrd3003_bliss.mythen
+  class: XrdMythen
+  name: mythen
+  hostname: 192.168.0.90
+  detector_settings: StdCu        # spec sends "-settings StdCu" (reconfig capture 2026-10-06); Mo tube: StdMo?
+  # Corrections as found on the detector under spec (read 2026-10-06; spec's
+  # mca_par("autocorrect", 1)); applied after the settings:
+  bad_channel_interpolation: true
+  flat_field_correction: true
+  rate_correction: false
+
+  rois:                           # channels [start, end), end excluded
+    spec: [659, 670]              # spec ROI_SPECULAR 659:669 (inclusive)
+    offspec1: [647, 658]          # spec ROI_OFFSPEC1 647:657
+    offspec2: [671, 682]          # spec ROI_OFFSPEC2 671:681
+
+  absorber: a2                    # absorber wheel (axis name, not $a2)
+  absorber_factors: [1, 7.97, 7.59, 7.7, 7.79, 7.26]   # spec absob[] (Cu radiation)
+  shutter: shutter                # closed when the count rate is too high
+  # Noisy channels (bursts seen in the first beam dscan, 2026-10-06; spec has
+  # them too). Interpolated from their neighbours for all counters and the
+  # pre-count; the saved spectrum stays raw.
+  masked_channels: [1271, 1273]
+
+  autoabsorber:                   # spec check_rate
+    enabled: true                 # initial state; auto_on()/auto_off() then kept in Redis
+    precount_time: 0.1            # s
+    close_above: 70000            # peak counts in the pre-count: close shutter + abort (always)
+    upper: 12400                  # above: more absorber (a2 at 6: close + abort)
+    lower: 1550                   # below: less absorber
+    max_steps: 12                 # absorber changes per point before giving up

@@ -1,0 +1,18 @@
+# Door state of the XRD-3003TT from the Pilz PNOZmulti m1p safety relay on
+# /dev/ttyS6 (spec: SDEV_2; the 2014 macro doorClosed() was never finished: it
+# opened the port at 9600 baud, the PNOZ needs 19200 8E2).
+# Read-only: request 0x2F, table 3 (state of inputs), segment 0.
+# Wiring found on 2026-10-06 (both doors closed: I0-I7 = 0x6D):
+#   door 1: I5, I6 high when closed, I7 high when open
+#   door 2: I2, I3 high when closed, I4 high when open (opens only after door 1)
+# The shutter refuses to open unless every door reads closed (door_check: doors).
+
+- plugin: bliss
+  package: xrd3003_bliss.doors
+  class: PnozDoors
+  name: doors
+  serial:
+    url: /dev/ttyS6
+  doors:
+    door1: {closed: [5, 6], open: [7]}
+    door2: {closed: [2, 3], open: [4]}

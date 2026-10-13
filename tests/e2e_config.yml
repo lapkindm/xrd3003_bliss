@@ -1,0 +1,62 @@
+- plugin: bliss
+  package: xrd3003_bliss.mythen
+  class: XrdMythen
+  name: mythen
+  hostname: 127.0.0.1
+  detector_settings: StdCu
+  rois:
+    spec: [659, 670]
+    offspec1: [647, 658]
+    offspec2: [671, 682]
+  absorber: a2
+  absorber_factors: [1, 7.97, 7.59, 7.7, 7.79, 7.26]
+  shutter: shutter
+  masked_channels: [1271, 1273]
+  autoabsorber:
+    enabled: true
+    precount_time: 0.1
+    close_above: 70000
+    upper: 12400
+    lower: 1550
+
+- plugin: bliss
+  package: isovolt_driver.generator
+  class: IsovoltGenerator
+  name: generator
+  serial:
+    url: <LINK>
+    baudrate: 9600
+
+- plugin: bliss
+  package: isovolt_driver.bliss_isovolt
+  class: IsovoltShutter
+  name: shutter
+  generator: generator
+  shutter: 1
+  absorber: a2
+  absorber_position: 6.0
+  door_check: doors
+
+- plugin: bliss
+  package: xrd3003_bliss.doors
+  class: PnozDoors
+  name: doors
+  serial:
+    url: <PLINK>
+  doors:
+    door1: {closed: [5, 6], open: [7]}
+    door2: {closed: [2, 3], open: [4]}
+
+- plugin: emotion
+  class: mockup
+  axes:
+    - name: a2
+      steps_per_unit: 3200
+      velocity: 40
+      acceleration: 320
+      low_limit: 0.9
+      high_limit: 6.1
+    - name: mx
+      steps_per_unit: 1000
+      velocity: 10
+      acceleration: 100

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xrd3003-bliss"
+version = "0.1.0"
+description = "XRD-3003TT Bliss site package: Mythen with spec counters, autoabsorber, count-rate shutter close"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["xrd3003_bliss"]
