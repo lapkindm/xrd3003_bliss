@@ -78,7 +78,7 @@ digits, `_`, `-` and `.` in names.
 | `chi` | sample tilt | deg |
 | `x` | sample translation (spec `phi`), limited to ±10 mm | mm |
 | `y`, `z` | sample translation, height | mm |
-| `m1` | monochromator | to be confirmed |
+| `m1` | monochromator | deg |
 | `a2` | absorber wheel of the autoabsorber (spec `A_Mo`), positions 1–6 | position |
 | `a1` | second absorber wheel (spec `A_Cu`), positions 1–6 | position |
 
