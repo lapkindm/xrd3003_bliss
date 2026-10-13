@@ -1,8 +1,8 @@
 """Door state of the XRD-3003TT from the Pilz PNOZmulti m1p safety relay.
 
 Read-only use of the PNOZmulti's integrated RS232 interface (*PNOZmulti
-communication interfaces*, Pilz 1001154-EN-13, ch. 5 and appendix 9.3;
-``isovolt_driver/docs/pnoz_com.txt``): request 0x2F "send data in table form",
+communication interfaces*, Pilz 1001154-EN-13, ch. 5 and appendix 9.3, not
+included here): request 0x2F "send data in table form",
 table 3 "state of inputs", segment 0. Nothing is ever written to the relay
 (the write requests 0x14/0x53 are not implemented).
 
