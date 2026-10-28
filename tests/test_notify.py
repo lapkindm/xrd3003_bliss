@@ -29,6 +29,7 @@ class Mails(unittest.TestCase):
                 sent.append(email.message_from_bytes(msg.as_bytes()))
 
         self.patches = [mock.patch.object(nt, "ERRORS_ALWAYS_TO", ME),
+                        mock.patch.object(nt, "MAIL_DOMAIN", "host.example.org"),
                         mock.patch.object(nt.smtplib, "SMTP", FakeSMTP),
                         mock.patch.object(nt, "_context", return_value=["Data file: /x/s.h5"])]
         for p in self.patches:
@@ -72,8 +73,13 @@ class Mails(unittest.TestCase):
     def test_from_address_and_optional_description(self):
         with nt.notifying("a@x.de"):
             pass
-        self.assertEqual(self.sent[0]["From"], f"{nt.getpass.getuser()}@{nt.MAIL_DOMAIN}")
+        self.assertEqual(self.sent[0]["From"], f"{nt.getpass.getuser()}@host.example.org")
         self.assertRegex(self.sent[0]["Subject"], r"^\[XRD-3003TT\] Finished: measurement started \w{3} \d\d \w{3} \d\d:\d\d$")
+
+    def test_no_mail_domain_no_from_header(self):
+        with mock.patch.object(nt, "MAIL_DOMAIN", None):
+            nt.notify("s", "t", to="a@x.de")
+        self.assertIsNone(self.sent[0]["From"])
 
     def test_no_fixed_address_set(self):
         with mock.patch.object(nt, "ERRORS_ALWAYS_TO", None):

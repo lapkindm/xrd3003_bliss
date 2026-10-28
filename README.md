@@ -322,9 +322,9 @@ with notifying("a@example.org"):          # description optional: "measurement s
 Recipients come first (comma-separated; `None` for error e-mails only), the
 description is optional. One e-mail when the block finishes and one when it
 stops on an error, sent by SMTP to the PC's own Postfix (localhost:25) with
-the sender `<user>@MAIL_DOMAIN`; nothing on Ctrl-C, also inside a scan. Error
-e-mails also always go to `notify.ERRORS_ALWAYS_TO`, which the instrument's
-session sets. A mail problem never stops the measurement.
+the sender `<user>@notify.MAIL_DOMAIN`; nothing on Ctrl-C, also inside a scan.
+Error e-mails also always go to `notify.ERRORS_ALWAYS_TO`. The instrument's
+session sets both (MAIL_DOMAIN = the Postfix host name). A mail problem never stops the measurement.
 
 ## Flint
 

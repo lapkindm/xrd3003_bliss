@@ -19,6 +19,11 @@ also always go to ERRORS_ALWAYS_TO, which the instrument's session sets
 
     import xrd3003_bliss.notify
     xrd3003_bliss.notify.ERRORS_ALWAYS_TO = "responsible@example.org"
+    xrd3003_bliss.notify.MAIL_DOMAIN = "host.example.org"   # sender <user>@MAIL_DOMAIN
+
+MAIL_DOMAIN is the Postfix myhostname/myorigin (main.cf), needed when the host
+itself only knows its short name; without it the e-mail has no From header
+and Postfix fills in the sender.
 """
 
 from __future__ import annotations
@@ -39,8 +44,7 @@ except ImportError:  # pragma: no cover
 
 SMTP_HOST = "localhost"
 SMTP_PORT = 25
-# Postfix myhostname/myorigin (main.cf); the host itself only knows the short name "xrd-3003tt"
-MAIL_DOMAIN = "xrd-3003tt.am10.uni-tuebingen.de"
+MAIL_DOMAIN: str | None = None  # Postfix myhostname/myorigin, for the From header (set by the session)
 ERRORS_ALWAYS_TO: str | None = None  # every error e-mail also goes here (set by the session)
 SUBJECT_PREFIX = "[XRD-3003TT]"
 
@@ -67,7 +71,8 @@ def notify(subject: str, text: str, to: str | None = None, error: bool = False) 
         if not to:
             return False
         msg = EmailMessage()
-        msg["From"] = f"{getpass.getuser()}@{MAIL_DOMAIN}"
+        if MAIL_DOMAIN:
+            msg["From"] = f"{getpass.getuser()}@{MAIL_DOMAIN}"
         msg["To"] = to
         msg["Subject"] = f"{SUBJECT_PREFIX} {subject}"
         msg.set_content(text)
