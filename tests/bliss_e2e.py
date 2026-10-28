@@ -303,23 +303,25 @@ pos_before = mx.position
 err = raises(lambda: goto_step(mythen.counters.spec, plot=False))
 check("goto_step after a loopscan: refused, nothing moved", err is not None and mx.position == pos_before, repr(err)[:100])
 
-# -- notifying(): e-mail text from a real session (sendmail captured) ----------------
+# -- notifying(): e-mail text from a real session (SMTP captured) -------------------
 from unittest import mock as _mock  # noqa: E402
 from xrd3003_bliss import notify as _nt  # noqa: E402
 _mails = []
-with _mock.patch.object(_nt.subprocess, "run", side_effect=lambda cmd, input, **kw: _mails.append(input.decode())):
-    with _nt.notifying("e2e run", to="t@x.de") as _st:
+_smtp = _mock.MagicMock()
+_smtp.return_value.__enter__.return_value.send_message.side_effect = lambda msg: _mails.append(msg.as_string())
+with _mock.patch.object(_nt.smtplib, "SMTP", _smtp):
+    with _nt.notifying("t@x.de", "e2e run") as _st:
         _st["point"] = "1/1"
         loopscan(2, 0.05, mythen)
     try:
-        with _nt.notifying("e2e fail", to="t@x.de"):
+        with _nt.notifying("t@x.de", "e2e fail"):
             raise RuntimeError("simulated stop")
     except RuntimeError:
         pass
 check("notifying: finished and stopped e-mails with data file and last scan",
       len(_mails) == 2 and "Finished: e2e run" in _mails[0] and "Last scan: #" in _mails[0]
       and "Data file:" in _mails[0] and "STOPPED: e2e fail" in _mails[1] and "simulated stop" in _mails[1],
-      [m.splitlines()[1][:60] for m in _mails])
+      [m[:80] for m in _mails])
 
 # -- with_actions(): actions at given points of a scan ------------------------------
 from xrd3003_bliss.actions import with_actions  # noqa: E402

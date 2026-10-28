@@ -177,7 +177,7 @@ Personal macros are Python files in `~/Macros/Users/<name>/`, like spec's
 `.mac` files. Load one with `user_script_load("<name>/<file>",
 export_global=True)` (again after editing it); `user_script_list()` lists
 them. Long measurements can send e-mails with
-`with notifying("my run", to="a@example.org"): ...`, and scans can run
+`with notifying("a@example.org", "my run"): ...`, and scans can run
 commands at given points with `with_actions` (both described below).
 
 ### Shell tips and troubleshooting
@@ -313,12 +313,16 @@ Bliss itself numbers scans per session, not per file.
 ## E-mail notifications
 
 ```python
-with notifying("spatial scan -25..25", to="a@example.org") as status:
+with notifying("a@example.org", "spatial scan -25..25") as status:
     ...                                   # status["point"] = "12/51" is reported
+with notifying("a@example.org"):          # description optional: "measurement started <day time>"
+    sct(36000)
 ```
 
-One e-mail when the block finishes and one when it stops on an error, sent
-through the PC's own `sendmail`; nothing on Ctrl-C, also inside a scan. Error
+Recipients come first (comma-separated; `None` for error e-mails only), the
+description is optional. One e-mail when the block finishes and one when it
+stops on an error, sent by SMTP to the PC's own Postfix (localhost:25) with
+the sender `<user>@MAIL_DOMAIN`; nothing on Ctrl-C, also inside a scan. Error
 e-mails also always go to `notify.ERRORS_ALWAYS_TO`, which the instrument's
 session sets. A mail problem never stops the measurement.
 

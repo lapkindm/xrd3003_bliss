@@ -1,12 +1,14 @@
 """E-mail notifications for long measurements.
 
-The control PC delivers mail itself (Postfix, local ``sendmail``; tested to
-uni-tuebingen.de on 2026-10-10). A long program wrapped in ``notifying``
-sends one e-mail when it finishes and one when it stops on an error; Ctrl-C
-sends nothing (you stopped it yourself)::
+Same form as xeuss_bliss/notify.py on xeuss20 (2026-10-28): recipients first,
+description optional, mail by SMTP to the local Postfix (localhost:25) with an
+explicit From address. The control PC delivers mail itself (Postfix, loopback
+only; tested to uni-tuebingen.de on 2026-10-10). A long program wrapped in
+``notifying`` sends one e-mail when it finishes and one when it stops on an
+error; Ctrl-C sends nothing (you stopped it yourself)::
 
     from xrd3003_bliss.notify import notifying
-    with notifying("spatial scan -25..25", to="a@x.de, b@y.de") as status:
+    with notifying("a@x.de, b@y.de", "spatial scan -25..25") as status:
         for j, pos in enumerate(positions):
             status["point"] = f"{j + 1}/{len(positions)} (y = {pos:g})"
             ...
@@ -23,8 +25,9 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import getpass
+import smtplib
 import socket
-import subprocess
 import traceback
 from email.message import EmailMessage
 
@@ -34,7 +37,10 @@ except ImportError:  # pragma: no cover
     class ScanAbort(BaseException):
         pass
 
-SENDMAIL = "/usr/sbin/sendmail"
+SMTP_HOST = "localhost"
+SMTP_PORT = 25
+# Postfix myhostname/myorigin (main.cf); the host itself only knows the short name "xrd-3003tt"
+MAIL_DOMAIN = "xrd-3003tt.am10.uni-tuebingen.de"
 ERRORS_ALWAYS_TO: str | None = None  # every error e-mail also goes here (set by the session)
 SUBJECT_PREFIX = "[XRD-3003TT]"
 
@@ -61,10 +67,12 @@ def notify(subject: str, text: str, to: str | None = None, error: bool = False) 
         if not to:
             return False
         msg = EmailMessage()
+        msg["From"] = f"{getpass.getuser()}@{MAIL_DOMAIN}"
         msg["To"] = to
         msg["Subject"] = f"{SUBJECT_PREFIX} {subject}"
         msg.set_content(text)
-        subprocess.run([SENDMAIL, "-t", "-oi"], input=msg.as_bytes(), check=True, timeout=30)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+            smtp.send_message(msg)
         return True
     except Exception as exc:  # noqa: BLE001
         print(f"Could not send the notification e-mail ({exc})")
@@ -88,12 +96,20 @@ def _context() -> list[str]:
 
 
 @contextlib.contextmanager
-def notifying(what: str, to: str | None = None):
+def notifying(to: str | None, what: str | None = None):
     """Send an e-mail when the wrapped program finishes (to ``to``) or stops
-    on an error (to ``to`` and ERRORS_ALWAYS_TO). Yields a dict: what the
-    program puts in it (e.g. "point") is reported."""
+    on an error (to ``to`` and ERRORS_ALWAYS_TO). ``to``: address(es), comma-
+    separated (None: only error e-mails to ERRORS_ALWAYS_TO); ``what``: optional
+    description for the subject, default "measurement started <day time>".
+    Yields a dict: what the program puts in it (e.g. "point") is reported.
+
+        with notifying("a@x.de"):
+            sct(36000)
+    """
     status: dict = {}
     start = datetime.datetime.now()
+    if not what:
+        what = f"measurement started {start:%a %d %b %H:%M}"
     host = socket.gethostname()
 
     def body(head: str) -> str:
