@@ -1,15 +1,12 @@
-"""FlintOnTopPreset with a fake Flint (no Bliss session, no display)."""
+"""FlintPopupPreset with a fake Flint and a fake X server (no Bliss session, no display)."""
 
 import unittest
 from unittest import mock
 
-import gevent
-
 from xrd3003_bliss import flint_display as fd
 
-ON = [("live:0", "window().setWindowFlag", (fd.STAYS_ON_TOP, False)),
-      ("live:0", "window().setWindowFlag", (fd.STAYS_ON_TOP, True)),
-      ("live:0", "window().show", ())]
+CLEAR = [("live:0", "window().setWindowFlag", (fd.STAYS_ON_TOP, False)),
+         ("live:0", "window().show", ())]
 FOCUS = [("live:0", "focus", ())]
 
 
@@ -38,79 +35,102 @@ class FakeSetting:
         self.value = value
 
 
+class FakeX:
+    def __init__(self):
+        self.raised = []
+
+    def raise_window(self, w):
+        self.raised.append(w)
+
+
 def make_preset(enabled=True):
     with mock.patch.object(fd, "_setting", return_value=FakeSetting(enabled)):
-        return fd.FlintOnTopPreset("test")
+        p = fd.FlintPopupPreset("test")
+    p._x = FakeX()
+    return p
 
 
 class Preset(unittest.TestCase):
-    def run_prepare(self, preset):
-        preset.prepare(None)
-        if preset._task is not None:
+    def setUp(self):
+        self.windows = mock.patch.object(fd, "flint_windows", side_effect=lambda pid: [pid * 10])
+        self.windows.start()
+
+    def tearDown(self):
+        self.windows.stop()
+
+    def scan_start(self, preset, flint):
+        with mock.patch.object(fd, "_get_flint", return_value=flint):
+            preset.prepare(None)
             preset._task.join(timeout=5)
 
-    def scans(self, preset, flint, states):
-        """One scan per X window state reported (True / False / None = unknown)."""
-        for state in states:
-            with mock.patch.object(fd, "_get_flint", return_value=flint), \
-                    mock.patch.object(fd, "is_on_top", return_value=state):
-                self.run_prepare(preset)
-
-    def test_unknown_state_once_per_flint_process(self):
-        flint = FakeFlint()
-        self.scans(make_preset(), flint, [None, None])
-        self.assertEqual(flint.calls, ON + FOCUS + FOCUS)
-
-    def test_reapplied_when_the_window_lost_it(self):  # GNOME dropped it, Qt still had the flag
-        flint = FakeFlint()
-        self.scans(make_preset(), flint, [None, True, False, True])
-        self.assertEqual(flint.calls, ON + FOCUS + FOCUS + ON + FOCUS + FOCUS)
-
-    def test_new_flint_process_is_switched_again(self):
-        preset = make_preset()
-        a, b = FakeFlint(pid=1), FakeFlint(pid=2)
-        self.scans(preset, a, [None])
-        self.scans(preset, b, [None])
-        self.assertEqual(a.calls, ON + FOCUS)
-        self.assertEqual(b.calls, ON + FOCUS)
-
-    def test_waits_for_flint_to_start(self):
-        flint = FakeFlint()
-        answers = [None, None, flint]
-        preset = make_preset()
-        with mock.patch.object(fd, "_get_flint", side_effect=lambda: answers.pop(0) if len(answers) > 1 else answers[0]), \
-                mock.patch.object(fd, "is_on_top", return_value=None), \
-                mock.patch.object(fd.gevent, "sleep", lambda s: gevent.idle()):
-            self.run_prepare(preset)
-        self.assertEqual(flint.calls, ON + FOCUS)
-
-    def test_on_top_off_still_shows_the_live_tab(self):
-        flint = FakeFlint()
-        self.scans(make_preset(enabled=False), flint, [False])
-        self.assertEqual(flint.calls, FOCUS)
-
-    def test_errors_do_not_reach_the_scan(self):
-        preset = make_preset()
-        broken = FakeFlint()
-        broken.run_method = mock.Mock(side_effect=RuntimeError("rpc timeout"))
-        with mock.patch.object(fd, "_get_flint", return_value=broken), \
-                mock.patch.object(fd, "is_on_top", return_value=None), \
-                mock.patch.object(fd, "log_warning") as warn:
-            self.run_prepare(preset)
-        warn.assert_called_once()
-
-    def test_switch_off_clears_the_flag(self):
-        flint = FakeFlint()
-        preset = make_preset()
+    def points(self, preset, flint, n):
         with mock.patch.object(fd, "_get_flint", return_value=flint):
-            preset.set(False)
-        self.scans(preset, flint, [False])  # disabled now: no change at the next scan
-        self.assertFalse(preset.enabled)
-        self.assertEqual(flint.calls, [ON[0], ON[2]] + FOCUS)
+            it = preset.get_iterator(None)
+            for _ in range(n):
+                next(it).stop()
+                if preset._pop is not None:
+                    preset._pop.join(timeout=5)
 
-    def test_is_on_top_without_x_tools(self):
-        with mock.patch.object(fd.subprocess, "run", side_effect=FileNotFoundError("xwininfo")):
-            self.assertIsNone(fd.is_on_top(123))
+    def test_scan_start_clears_old_on_top_once_shows_live_tab_and_raises(self):
+        p, flint = make_preset(), FakeFlint()
+        self.scan_start(p, flint)
+        self.scan_start(p, flint)
+        self.assertEqual(flint.calls, CLEAR + FOCUS + FOCUS)   # flag cleared once per Flint process
+        self.assertEqual(p._x.raised, [1000, 1000])            # raised at each scan start
+
+    def test_new_flint_process_cleared_again(self):
+        p = make_preset()
+        self.scan_start(p, FakeFlint(pid=100))
+        f2 = FakeFlint(pid=200)
+        self.scan_start(p, f2)
+        self.assertEqual(f2.calls, CLEAR + FOCUS)
+        self.assertEqual(p._x.raised, [1000, 2000])
+
+    def test_after_each_point_at_most_once_per_interval(self):
+        p, flint = make_preset(), FakeFlint()
+        with mock.patch.object(fd.time, "monotonic", side_effect=[10.0, 10.0, 10.5, 11.2, 11.2]):
+            self.points(p, flint, 3)   # t = 10.0 raise, 10.5 too soon, 11.2 raise
+        self.assertEqual(p._x.raised, [1000, 1000])
+
+    def test_disabled_never_raises_but_still_shows_live_tab(self):
+        p, flint = make_preset(enabled=False), FakeFlint()
+        self.scan_start(p, flint)
+        self.points(p, flint, 3)
+        self.assertEqual(p._x.raised, [])
+        self.assertIn(("live:0", "focus", ()), flint.calls)
+
+    def test_no_flint_window_found(self):
+        p, flint = make_preset(), FakeFlint()
+        with mock.patch.object(fd, "flint_windows", return_value=[]):
+            self.scan_start(p, flint)
+        self.assertEqual(p._x.raised, [])
+
+    def test_errors_never_reach_the_scan(self):
+        p, flint = make_preset(), FakeFlint()
+        p._x.raise_window = mock.Mock(side_effect=OSError("no display"))
+        with mock.patch.object(fd, "log_warning") as warn:
+            self.scan_start(p, flint)
+            self.points(p, flint, 1)
+        self.assertEqual(warn.call_count, 2)
+
+    def test_set_switches_the_session_setting(self):
+        p = make_preset()
+        p.set(False)
+        self.assertFalse(p.enabled)
+        p.set(True)
+        self.assertTrue(p.enabled)
+
+
+class XMessage(unittest.TestCase):
+    def test_above_on_then_off_as_pager_request(self):
+        x = fd.X11.__new__(fd.X11)
+        sent = []
+        x.dpy, x.root, x.state, x.above = 1, 2, 300, 301
+        x.x = mock.Mock()
+        x.x.XSendEvent.side_effect = lambda dpy, root, prop, mask, ev: sent.append(
+            (ev._obj.xclient.window, ev._obj.xclient.message_type, list(ev._obj.xclient.data)))
+        x.raise_window(0x1800016)
+        self.assertEqual(sent, [(0x1800016, 300, [1, 301, 0, 2, 0]), (0x1800016, 300, [0, 301, 0, 2, 0])])
 
 
 if __name__ == "__main__":

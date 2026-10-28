@@ -147,7 +147,7 @@ returns to its **Live scan** tab at every scan. The curve shows the
 | Log / linear y axis | toolbar button, or `get_flint().get_live_plot(kind="default-curve").yscale = "log"` |
 | Counts per second | property panel → **Create items** → **Normalized function** → `mythen:exposure` |
 | Live derivative or Gaussian fit | property panel → **Create items** → **Derivative function** / **Gaussian fit** |
-| Flint not always on top | `flint_on_top(False)`; back with `flint_on_top(True)` |
+| Flint not popping up during scans | `flint_popup(False)`; back with `flint_popup(True)` |
 | Close or move a tab | **Layout** → **Lock/unlock the view** (Ctrl+L), then the × in the plot's title bar |
 
 `get_flint` needs `from bliss.common.plot import get_flint` first. The
@@ -328,12 +328,14 @@ session sets both (MAIL_DOMAIN = the Postfix host name). A mail problem never st
 
 ## Flint
 
-`flint_display.FlintOnTopPreset` (on the default chain) switches Flint to
-"always on top" and back to its live tab at the start of each scan. GNOME on
-Wayland does not let Flint bring itself to the front, but it does honour
-"always on top". The preset checks the real window state (`xprop`) and
-re-applies it when the desktop has dropped it. `flint_on_top(False)` in the
-session switches it off.
+`flint_display.FlintPopupPreset` (on the default chain) brings Flint to the
+front when a scan starts and after every point (at most once per second),
+without keeping it above other windows, and switches it back to its live tab
+at the start of each scan. GNOME on Wayland does not let Flint bring itself to
+the front; the preset sends the X11 window manager an "above on, above off"
+request (EWMH `_NET_WM_STATE`, as a taskbar does) through libX11, so the
+window is raised once and then stays in the normal stack. Keyboard focus is
+not taken. `flint_popup(False)` in the session switches it off.
 
 ## Tests
 
