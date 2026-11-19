@@ -124,6 +124,15 @@ class Shadow(unittest.TestCase):
         with self.assertRaises(ValueError):
             fit_shadow(self.x, self.x + 1)  # rising only
 
+    def test_maximum_near_the_end_is_refused(self):
+        # apex at 0.37: 4 points on the right side of the maximum (0.4 .. 0.5)
+        y = triangle(self.x, 0.37, 8e4, 2.5e5, -1.5e5, floor=-numpy.inf)
+        with self.assertRaisesRegex(ValueError, "at least 7"):
+            fit_shadow(self.x, y)
+        fit_shadow(self.x, y, min_points=2)  # still possible on request
+        # apex at 0.32: 7 points on the right (0.35 .. 0.5) is enough
+        fit_shadow(self.x, triangle(self.x, 0.32, 8e4, 2.5e5, -1.5e5, floor=-numpy.inf))
+
     def test_bad_levels(self):
         with self.assertRaises(ValueError):
             fit_shadow(self.x, triangle(self.x, 0, 1, 1, -1), levels=(0.9, 0.1))

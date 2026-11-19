@@ -116,7 +116,12 @@ class ShadowFit(NamedTuple):
     axis: str
 
 
-def fit_shadow(x, y, levels: tuple[float, float] | None = None):
+# Fewest points a flank line of a shadow scan may rest on: with fewer, the
+# maximum is too close to the end of the scan for a trustworthy apex.
+SHADOW_MIN_POINTS = 7
+
+
+def fit_shadow(x, y, levels: tuple[float, float] | None = None, min_points: int = SHADOW_MIN_POINTS):
     """Fit straight lines to both sides of the maximum of y(x).
 
     The points are taken in order of x. The highest point lies on only one of
@@ -126,6 +131,8 @@ def fit_shadow(x, y, levels: tuple[float, float] | None = None):
     the crossing point (apex) it lies on, and both lines are fitted again.
     ``levels=(low, high)`` keeps only points with low*max <= y <= high*max
     (e.g. (0.2, 0.9) leaves out a flat baseline and a rounded tip).
+    Each line needs at least ``min_points`` points (after the levels cut);
+    otherwise ValueError, e.g. when the maximum is near the end of the scan.
     Returns (peak, apex, height, slope_left, slope_right, intercept_left,
     intercept_right, n_left, n_right).
     """
@@ -148,9 +155,9 @@ def fit_shadow(x, y, levels: tuple[float, float] | None = None):
         out = []
         for name, side in (("left", left), ("right", right)):
             side = side & usable
-            if side.sum() < 2:
-                raise ValueError(f"not enough points on the {name} side of the maximum "
-                                 f"(at {x[i]:g}) for a straight line")
+            if side.sum() < min_points:
+                raise ValueError(f"only {int(side.sum())} points on the {name} side of the maximum "
+                                 f"(at {x[i]:g}), at least {min_points} needed for the line")
             out.append((numpy.polyfit(x[side], y[side], 1), int(side.sum())))
         return out
 
@@ -345,15 +352,17 @@ def deriv_fwhm(counter=None, axis=None, scan=None, plot: bool = True):
     return res
 
 
-def shad_fit(counter=None, axis=None, scan=None, levels=None, plot: bool = True):
+def shad_fit(counter=None, axis=None, scan=None, levels=None, plot: bool = True,
+             min_points: int = SHADOW_MIN_POINTS):
     """Maximum and the two flank slopes of a shadow scan (triangle).
 
     Scan, counter and axes are chosen as for cen(): the last scan, the
     plotselect counter, every scanned motor (an a2scan th/tth gives one fit
     per motor). Straight lines are fitted to the points on each side of the
     maximum; ``levels=(0.2, 0.9)`` uses only points between 20 and 90 % of
-    the maximum. Returns a ``ShadowFit`` (peak, apex, height, slope_left,
-    slope_right, ...), a mapping per motor for several motors, and shows the
+    the maximum. Each line needs at least ``min_points`` points (default 7),
+    so a maximum near the end of the scan is refused. Returns a ``ShadowFit``
+    (peak, apex, height, slope_left, slope_right, ...), a mapping per motor for several motors, and shows the
     scan with both lines in the Flint tab "shadow".
     """
     from bliss.scanning.scan_tools import ScanFits, _get_default_scan_and_counter
@@ -362,7 +371,7 @@ def shad_fit(counter=None, axis=None, scan=None, levels=None, plot: bool = True)
     cname = _name(counter)
 
     def fit(x, y):
-        return (*fit_shadow(x, y, levels), numpy.asarray(x, dtype=float), numpy.asarray(y, dtype=float))
+        return (*fit_shadow(x, y, levels, min_points), numpy.asarray(x, dtype=float), numpy.asarray(y, dtype=float))
 
     found = ScanFits(scan).find_position(fit, counter, axis=axis)
     for ax, values in found.items():
